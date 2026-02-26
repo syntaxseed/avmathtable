@@ -35,6 +35,8 @@ Commands operate on the **numeric** column values above them. Non-numeric or cel
 * `=AVG` - Calculate the average of the numeric values in this column so far.
 * `=SUM` - Calculate the sum/total of the numeric values in this column so far.
 * `=CNT` - Display the number of numeric values in this column so far.
+* `=MAX` - Display the maximum numeric value in the column.
+* `=MIN` - Display the minimum numeric value in the column.
 
 ### Output
 
@@ -46,4 +48,5 @@ Not yet tested with cells that span multiple columns or rows.
 
 ## Version History
 
+2026-02-26 - Make it work with 0 decimal numbers like for currency (8.00). Add MIN/MAX commands.
 2026-02-25 - First version with basic functions.

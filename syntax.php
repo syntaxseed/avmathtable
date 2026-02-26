@@ -8,6 +8,8 @@
  *    AVG - Calculate average of the column.
  *    SUM - Calculate total of the column.
  *    CNT - Number of numeric values in the column above this cell.
+ *    MAX - Maximum value in the column.
+ *    MIN - Minimum value in the column.
  *
  * USAGE:
 <mathtable>
@@ -85,7 +87,6 @@ class syntax_plugin_avmathtable extends DokuWiki_Syntax_Plugin
                 [$table, $info] = $tables;
 
                 $this->infoTable = $info;
-                //$match = $table;
 
                 return array($state, $tables);
 
@@ -110,10 +111,6 @@ class syntax_plugin_avmathtable extends DokuWiki_Syntax_Plugin
             }
 
             list($state, $tables) = $data;
-
-            // echo('<pre>');
-            // var_dump($state, $tables);
-            // echo('</pre>');
 
             [$match, $info] = $tables;
             $this->infoTable = $info;
@@ -153,14 +150,10 @@ class syntax_plugin_avmathtable extends DokuWiki_Syntax_Plugin
      */
     private function parseTable(string $tableSyntax): array
     {
-        // 1) Parse the wiki table text into a collection of instructions.
+        // Parse the wiki table text into a collection of instructions.
         $calls = p_get_instructions($tableSyntax);
 
-        // echo('<pre>');
-        // var_dump($calls);
-        // echo('</pre>');
-
-        // 2) Convert to array
+        // Convert to a multidimensional array
         $table = [];
         $row   = [];
         $cell  = null;
@@ -223,7 +216,7 @@ class syntax_plugin_avmathtable extends DokuWiki_Syntax_Plugin
             foreach ($row as $j => $cell) {
                 // Initialize info about this column.
                 if ($rowNum == 1) {
-                    $columnData[$j] = ['sum' => 0, 'count' => 0, 'precision' => 0];
+                    $columnData[$j] = ['sum' => 0, 'count' => 0, 'precision' => 0, 'min' => null, 'max' => null];
                 }
 
                 // Open up the cell wiki syntax.
@@ -238,14 +231,16 @@ class syntax_plugin_avmathtable extends DokuWiki_Syntax_Plugin
 
                 // Gather info about the numbers in this cell.
                 if (is_numeric($cell)) {
+                    $columnData[$j]['count'] += 1;
+                    $columnData[$j]['precision'] = max($columnData[$j]['precision'], $this->countDecimalPlaces($cell));
                     if ((int)$cell == $cell) {
-                        $columnData[$j]['sum'] += intval($cell);
-                        $columnData[$j]['count'] += 1;
+                        $numericCell = intval($cell);
                     } elseif ((float)$cell == $cell) {
-                        $columnData[$j]['sum'] += floatval($cell);
-                        $columnData[$j]['count'] += 1;
-                        $columnData[$j]['precision'] = max($columnData[$j]['precision'], $this->countDecimalPlaces((float)$cell));
+                        $numericCell = floatval($cell);
                     }
+                    $columnData[$j]['sum'] += $numericCell;
+                    $columnData[$j]['max'] = is_null($columnData[$j]['max']) ? $numericCell : max($columnData[$j]['max'], $numericCell);
+                    $columnData[$j]['min'] = is_null($columnData[$j]['min']) ? $numericCell : min($columnData[$j]['min'], $numericCell);
                 }
 
                 // Insert the cell value. TODO : Handle special math features.
@@ -283,23 +278,39 @@ class syntax_plugin_avmathtable extends DokuWiki_Syntax_Plugin
 
         switch (trim($cell)) {
             case '=SUM':
-                return '<span class="avmathtablevalue">' . $columnData[$colNum]['sum'] . '</span>';
+                return '<span class="avmathtablevalue">' . number_format($columnData[$colNum]['sum'], $columnData[$colNum]['precision']) .'</span>';
                 break;
             case '=CNT':
                 return '<span class="avmathtablevalue">' . $columnData[$colNum]['count'] . '</span>';
                 break;
             case '=AVG':
-                return '<span class="avmathtablevalue">' . round(($columnData[$colNum]['sum'] / $columnData[$colNum]['count']), $columnData[$colNum]['precision']+1) . '</span>';
+                return '<span class="avmathtablevalue">' . number_format(round(($columnData[$colNum]['sum'] / $columnData[$colNum]['count']), $columnData[$colNum]['precision']+1), $columnData[$colNum]['precision']+1) . '</span>';
+                break;
+            case '=MAX':
+                return '<span class="avmathtablevalue">' . $columnData[$colNum]['max'] . '</span>';
+                break;
+            case '=MIN':
+                return '<span class="avmathtablevalue">' . $columnData[$colNum]['min'] . '</span>';
                 break;
             default:
                 return $cell;
         }
     }
 
-    private function countDecimalPlaces(float $num): int
+    /**
+     * Count the decimal places after the period.
+     * Note that 50.00 gets treated as 50, so we need to count zeros separately and take the largest number.
+     */
+    private function countDecimalPlaces(mixed $num): int
     {
+        var_dump($num);
+        // Number of 0s after the decimal:
+        preg_match("/^(0+)/", explode('.', $num)[1], $matches);
+        $numZeros = strlen($matches[0]);
+
+        // Count number of significant digits after the decimal:
         $fNumber = floatval($num);
         for ($iDecimals = 0; $fNumber != round($fNumber, $iDecimals); $iDecimals++);
-        return $iDecimals;
+        return max($iDecimals, $numZeros);
     }
 } // End class
