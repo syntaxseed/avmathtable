@@ -303,10 +303,12 @@ class syntax_plugin_avmathtable extends DokuWiki_Syntax_Plugin
      */
     private function countDecimalPlaces(mixed $num): int
     {
-        var_dump($num);
         // Number of 0s after the decimal:
-        preg_match("/^(0+)/", explode('.', $num)[1], $matches);
-        $numZeros = strlen($matches[0]);
+        $numZeros = 0;
+        if (strpos($num, '.') !== false) {
+            preg_match("/^(0+)/", explode('.', $num)[1], $matches);
+            $numZeros = strlen($matches[0]);
+        }
 
         // Count number of significant digits after the decimal:
         $fNumber = floatval($num);
