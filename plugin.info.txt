@@ -1,7 +1,7 @@
 base   avmathtable
 author Sherri Wheeler
 email  http://SyntaxSeed.com
-date   2026-02-26
+date   2026-03-14
 name   AV Math Table
 desc   Create tables and does math on the columns.
 url    https://www.dokuwiki.org/plugin:avmathtable

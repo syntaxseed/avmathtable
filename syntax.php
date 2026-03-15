@@ -6,7 +6,9 @@
  * Adds math to columns for Dokuwiki tables.
  * Supported Math:
  *    AVG - Calculate average of the column.
- *    SUM - Calculate total of the column.
+ *    SUM - Calculate total of the entire column so far.
+ *    TOT - Calculate the total since the last total (TOT) was shown. Like a section subtotal.
+ *    ROW - Works like SUM but for the current row. Sums the cells to the left of the one where this command is called. Does not work with other commands in the row. Ie can't sum a row of totals (yet).
  *    CNT - Number of numeric values in the column above this cell.
  *    MAX - Maximum value in the column.
  *    MIN - Minimum value in the column.
@@ -209,14 +211,36 @@ class syntax_plugin_avmathtable extends DokuWiki_Syntax_Plugin
         $output = '';
 
         $columnData = [];
+        $rowData = [];
         $rowNum = 1;
+
         // Create each row:
         foreach ($table as $i => $row) {
+            $colNum = 1; // First column of a new row.
             // Create each cell:
             foreach ($row as $j => $cell) {
+
                 // Initialize info about this column.
                 if ($rowNum == 1) {
-                    $columnData[$j] = ['sum' => 0, 'count' => 0, 'precision' => 0, 'min' => null, 'max' => null];
+                    $columnData[$j] = [
+                        'sum' => 0,
+                        'count' => 0,
+                        'total' => 0,
+                        'precision' => 0,
+                        'min' => null,
+                        'max' => null
+                    ];
+                }
+
+                // Initialize info about this row.
+                if ($colNum == 1) {
+                    $rowData[$i] = [
+                        'sum' => 0,
+                        'count' => 0,
+                        'precision' => 0,
+                        'min' => null,
+                        'max' => null
+                    ];
                 }
 
                 // Open up the cell wiki syntax.
@@ -232,19 +256,25 @@ class syntax_plugin_avmathtable extends DokuWiki_Syntax_Plugin
                 // Gather info about the numbers in this cell.
                 if (is_numeric($cell)) {
                     $columnData[$j]['count'] += 1;
+                    $rowData[$i]['count'] += 1;
                     $columnData[$j]['precision'] = max($columnData[$j]['precision'], $this->countDecimalPlaces($cell));
+                    $rowData[$i]['precision'] = max($rowData[$i]['precision'], $this->countDecimalPlaces($cell));
                     if ((int)$cell == $cell) {
                         $numericCell = intval($cell);
                     } elseif ((float)$cell == $cell) {
                         $numericCell = floatval($cell);
                     }
                     $columnData[$j]['sum'] += $numericCell;
+                    $rowData[$i]['sum'] += $numericCell;
+                    $columnData[$j]['total'] += $numericCell;
                     $columnData[$j]['max'] = is_null($columnData[$j]['max']) ? $numericCell : max($columnData[$j]['max'], $numericCell);
                     $columnData[$j]['min'] = is_null($columnData[$j]['min']) ? $numericCell : min($columnData[$j]['min'], $numericCell);
+                    $rowData[$i]['max'] = is_null($rowData[$i]['max']) ? $numericCell : max($rowData[$i]['max'], $numericCell);
+                    $rowData[$i]['min'] = is_null($rowData[$i]['min']) ? $numericCell : min($rowData[$i]['min'], $numericCell);
                 }
 
                 // Insert the cell value. TODO : Handle special math features.
-                $output .= $this->insertCellData($cell, $columnData, $rowNum, $j);
+                $output .= $this->insertCellData($cell, $columnData, $rowData, $j, $i);
 
 
                 // Close up the cell wiki syntax.
@@ -256,6 +286,7 @@ class syntax_plugin_avmathtable extends DokuWiki_Syntax_Plugin
                 } else {
                     $output .= " |";
                 }
+                $colNum++;
             }
             $output .= "\n"; // End of a row.
             $rowNum++;
@@ -269,7 +300,7 @@ class syntax_plugin_avmathtable extends DokuWiki_Syntax_Plugin
     /**
      * Put the value back in the cell. Substitute math where applicable.
      */
-    private function insertCellData(mixed $cell, array $columnData, int $rowNum, int $colNum)
+    private function insertCellData(mixed $cell, array &$columnData, array &$rowData, int $colNum, int $rowNum,)
     {
 
         // echo('<pre>');
@@ -279,6 +310,14 @@ class syntax_plugin_avmathtable extends DokuWiki_Syntax_Plugin
         switch (trim($cell)) {
             case '=SUM':
                 return '<span class="avmathtablevalue">' . number_format($columnData[$colNum]['sum'], $columnData[$colNum]['precision']) .'</span>';
+                break;
+            case '=ROW':
+                return '<span class="avmathtablevalue">' . number_format($rowData[$rowNum]['sum'], $rowData[$rowNum]['precision']) .'</span>';
+                break;
+            case '=TOT':
+                $temp = number_format($columnData[$colNum]['total'], $columnData[$colNum]['precision']);
+                $columnData[$colNum]['total'] = 0; // Reset to begin a new total.
+                return '<span class="avmathtablevalue">' . $temp .'</span>';
                 break;
             case '=CNT':
                 return '<span class="avmathtablevalue">' . $columnData[$colNum]['count'] . '</span>';
